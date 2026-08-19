@@ -1,0 +1,143 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: http://keycloak:8080
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./keycloak/acp-realm.json:/opt/keycloak/data/import/acp-realm.json:ro
+    ports:
+      - "8081:8080"
+
+  mandate-registry:
+    build: ./mandates
+    environment:
+      MANDATE_SEED: /data/mandates.yaml
+    volumes:
+      - ./mandates/mandates.yaml:/data/mandates.yaml:ro
+    ports:
+      - "8091:8090"
+
+  authzen-pdp:
+    build: ./authzen_pdp
+    volumes:
+      - ./pdp:/policies:ro
+
+  receipt-log:
+    build: ./receipts
+    environment:
+      RECEIPT_ISSUER: https://acp.prototype.invalid/receipts
+    ports:
+      - "8092:8080"
+
+  gateway-bridge:
+    build: ./adapter
+    environment:
+      MANDATE_REGISTRY_URL: http://mandate-registry:8090
+      PDP_URL: http://authzen-pdp:8080
+      RECEIPT_LOG_URL: http://receipt-log:8080
+    depends_on:
+      - mandate-registry
+      - authzen-pdp
+      - receipt-log
+
+  travel-tool:
+    build: ./mcp_server
+    environment:
+      BFF_URL: http://travel-bff:8080
+      BFF_CALLER_TOKEN: synthetic-mcp-to-bff-caller-token
+      GATEWAY_CALLER_TOKEN: synthetic-gateway-to-tool-caller-token
+    depends_on:
+      - travel-bff
+    # Deliberately no host port, and it serves only its gateway: calls must
+    # traverse agentgateway even from inside the Compose network.
+
+  travel-bff:
+    build: ./bff
+    environment:
+      BFF_CALLER_TOKEN: synthetic-mcp-to-bff-caller-token
+      PROVIDER_URL: http://travel-provider:8080
+      DEMO_PRINCIPAL: "00000000-0000-0000-0000-000000000001"
+      VAULT_URL: http://credential-vault:8080
+      VAULT_CLIENT_TOKEN: synthetic-bff-to-vault-client-token
+    depends_on:
+      - travel-provider
+      - credential-vault
+
+  credential-vault:
+    build: ./credential_vault
+    environment:
+      VAULT_BFF_CLIENT_TOKEN: synthetic-bff-to-vault-client-token
+      DEMO_PRINCIPAL: "00000000-0000-0000-0000-000000000001"
+      SYNTHETIC_PROVIDER_TOKEN: synthetic-provider-token-elena-only
+
+  travel-provider:
+    build: ./provider
+    environment:
+      SYNTHETIC_PROVIDER_TOKEN: synthetic-provider-token-elena-only
+
+  bench-components:
+    # Times each control-plane hop from inside the network, so no host port
+    # mapping is charged to the measurement. Run-once container.
+    profiles: ["bench"]
+    build: ./bench
+    environment:
+      MANDATE_REGISTRY_URL: http://mandate-registry:8090
+      PDP_URL: http://authzen-pdp:8080
+      RECEIPT_LOG_URL: http://receipt-log:8080
+      DEMO_PRINCIPAL: "00000000-0000-0000-0000-000000000001"
+
+  attacker:
+    # An adversary that already has a foothold inside the network, used by the
+    # bypass and exfiltration scenarios.  Run-once container, never a service.
+    profiles: ["attack"]
+    build: ./attacker
+    environment:
+      MCP_SERVER_URL: http://travel-tool:8000/mcp
+      BFF_URL: http://travel-bff:8080
+      VAULT_URL: http://credential-vault:8080
+      PROVIDER_URL: http://travel-provider:8080
+      REGISTRY_URL: http://mandate-registry:8090
+      SYNTHETIC_PROVIDER_TOKEN: synthetic-provider-token-elena-only
+
+  agent-demo:
+    profiles: ["agent-demo"]
+    build: ./agent_demo
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AGENT_MODEL: ${AGENT_MODEL:-openai:gpt-5.5}
+      KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/acp/protocol/openid-connect/token
+      GATEWAY_URL: http://gateway:3000/mcp
+    depends_on:
+      - keycloak
+      - gateway
+
+  gateway:
+    image: ghcr.io/agentgateway/agentgateway:v1.4.1
+    command: ["-f", "/etc/acp/config.yaml"]
+    volumes:
+      - ./gateway/config.yaml:/etc/acp/config.yaml:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      - keycloak
+      - gateway-bridge
+      - travel-tool
+      - travel-bff
+      - credential-vault
+
+  gateway-baseline:
+    image: ghcr.io/agentgateway/agentgateway:v1.4.1
+    command: ["-f", "/etc/acp/config.yaml"]
+    volumes:
+      - ./gateway/baseline-config.yaml:/etc/acp/config.yaml:ro
+    ports:
+      - "3002:3000"
+    depends_on:
+      - keycloak
+      - travel-tool
+      - travel-bff
+      - credential-vault

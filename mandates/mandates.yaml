@@ -1,0 +1,15 @@
+mandates:
+  - mandate_id: travel-elena-v1
+    principal: "00000000-0000-0000-0000-000000000001"
+    agent_client: agent-client
+    permitted_operations:
+      - flight.book
+    state: active
+    expires_at: "2030-01-01T00:00:00Z"
+  - mandate_id: credential-probe-elena-v1
+    principal: "00000000-0000-0000-0000-000000000001"
+    agent_client: agent-client
+    permitted_operations:
+      - credential.probe
+    state: active
+    expires_at: "2030-01-01T00:00:00Z"

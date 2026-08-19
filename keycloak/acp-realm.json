@@ -1,0 +1,56 @@
+{
+  "realm": "acp",
+  "enabled": true,
+  "displayName": "Agent Control Plane Prototype",
+  "sslRequired": "NONE",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "clients": [
+    {
+      "clientId": "agent-client",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "agent-client-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "attributes": {"standard.token.exchange.enabled": "true"},
+      "protocolMappers": [
+        {
+          "name": "gateway-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "included.client.audience": "agent-control-plane"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "travel-api",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "travel-api-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "attributes": {"standard.token.exchange.enabled": "true"}
+    }
+  ],
+  "users": [
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "username": "elena",
+      "enabled": true,
+      "email": "elena@example.test",
+      "emailVerified": true,
+      "firstName": "Elena",
+      "lastName": "Diaz",
+      "requiredActions": [],
+      "credentials": [{"type": "password", "value": "elena-password", "temporary": false}]
+    }
+  ]
+}

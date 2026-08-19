@@ -1,0 +1,6 @@
+[
+  {"uid": {"type": "Agent", "id": "agent-client"}, "attrs": {}, "parents": []},
+  {"uid": {"type": "Tool", "id": "flight.book"}, "attrs": {}, "parents": []},
+  {"uid": {"type": "Tool", "id": "credential.probe"}, "attrs": {}, "parents": []},
+  {"uid": {"type": "Action", "id": "tools/call"}, "attrs": {}, "parents": []}
+]

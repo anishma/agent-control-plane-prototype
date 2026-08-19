@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+# Only port 3000 is reachable by the host. The MCP server is internal to the
+# Compose network, making this gateway the sole exposed path to a tool.
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - matches:
+      - path:
+          exact: /mcp
+      policies:
+        # The MCP server accepts a call only when it carries this gateway
+        # identity, so mediation survives an adversary already inside the
+        # network.  Both gateways set it identically.
+        requestHeaderModifier:
+          set:
+            x-gateway-caller: synthetic-gateway-to-tool-caller-token
+        mcpAuthentication:
+          mode: strict
+          issuer: http://keycloak:8080/realms/acp
+          audiences: [agent-control-plane]
+          jwks:
+            url: http://keycloak:8080/realms/acp/protocol/openid-connect/certs
+          resourceMetadata:
+            resource: http://localhost:3001/mcp
+            scopesSupported: [openid]
+            bearerMethodsSupported: [header]
+        mcpGuardrails:
+          processors:
+          - kind: remote
+            methods: {"tools/call": full}
+            host: gateway-bridge:50051
+            failureMode: failClosed
+            metadata:
+              principal: "jwt.sub"
+              agent_client: "jwt.azp"
+      backends:
+      - mcp:
+          targets:
+          - name: travel-tool
+            mcp:
+              host: http://travel-tool:8000/mcp
